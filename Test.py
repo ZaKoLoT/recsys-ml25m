@@ -1,2 +1,2 @@
 def leslie(x) :
-    print("leslie")
+    print("leslie est trop intelligente")
