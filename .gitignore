@@ -1,0 +1,34 @@
+# =========================
+# Environnement virtuel
+# =========================
+venv/
+env/
+.env
+
+# =========================
+# Données (Data lourde)
+# =========================
+# On ignore tout le contenu du dossier data pour ne pas pousser de gros CSV sur Git
+data/*
+# Sauf si tu veux garder la structure des dossiers vides (optionnel)
+!data/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# =========================
+# Caches et fichiers temporaires Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Jupyter Notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Fichiers système (Mac/Windows)
+# =========================
+.DS_Store
+Thumbs.db
