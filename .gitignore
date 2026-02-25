@@ -33,3 +33,12 @@ __pycache__/
 # =========================
 .DS_Store
 Thumbs.db
+
+# =========================
+# Caches Python et Outils
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
