@@ -8,10 +8,11 @@ env/
 # =========================
 # Données (Data lourde)
 # =========================
-# On ignore tout le contenu du dossier data pour ne pas pousser de gros CSV sur Git
-data/*
-# Sauf si tu veux garder la structure des dossiers vides (optionnel)
-!data/.gitkeep
+# On ignore le contenu des sous-dossiers
+data/raw/*
+data/processed/*
+
+# MAIS on force Git à garder ces fichiers spécifiques
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
