@@ -97,6 +97,7 @@ def main():
     
     for input_csv in raw_dir.glob("*.csv"):
         if input_csv.name not in traited_file:
+            print(f"Generic conversion of {input_csv.name}...")
             output_pq = processed_dir / input_csv.name.replace(".csv", ".parquet")
             con.execute(f"COPY (SELECT * FROM read_csv_auto('{input_csv}')) TO '{output_pq}' (FORMAT PARQUET)")
 

@@ -24,7 +24,7 @@ combine :
 À l'issue de ce projet, les éléments suivants seront produits :
 
 - Un repository Git structuré (`src/`, `notebooks/`, `data/`, `app/`, `tests/`).
-- Des notebooks d'analyse exploratoire (AED), d'entraînement et d'évaluation propres.
+- Des notebooks d'analyse exploratoire (EDA), d'entraînement et d'évaluation propres.
 - Une application de démonstration interactive développée avec **Streamlit**.
 - Un rapport de synthèse de 6 à 10 pages présentant la méthode, les résultats, les limites et les pistes d'amélioration.
 
@@ -34,11 +34,13 @@ combine :
 
 Le projet est conçu pour être entièrement reproductible. Pour télécharger, nettoyer et préparer le dataset brut en un format optimisé (Parquet), exécutez la commande suivante à la racine du projet:
 
-`python scripts/make_dataset.py`
+Sur Windows : `python scripts/make_dataset.py`
+Sur Mac/Linux : `python3 scripts/make_dataset.py`
 
 Pour lancer le pipeline complet avec la configuration finale (nettoyage itératif, création des tables et split train/val/test), utilisez :
 
-`python scripts/make_dataset.py --config configs/dataset_v1.yaml`
+Sur Windows : `python scripts/make_dataset.py --config configs/dataset_v1.yaml`
+Sur Mac/Linux : `python3 scripts/make_dataset.py --config configs/dataset_v1.yaml`
 
 ---
 
