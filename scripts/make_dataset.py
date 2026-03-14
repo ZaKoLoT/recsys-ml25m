@@ -29,15 +29,18 @@ def main():
         
         count_written = con.execute(f"SELECT COUNT(*) FROM read_parquet('{interactions_pq}')").fetchone()[0]
         assert count_written == count_expected, f"Line error : Expected {count_expected}, obtained {count_written}"
+        print(f"      - Row count check passed ({count_written} rows).")
         
         min_ts = con.execute(f"SELECT MIN(timestamp) FROM read_parquet('{interactions_pq}')").fetchone()[0]
         assert min_ts >= 0, f"Error : Negative timestamp detected ({min_ts})"
+        print("      - Timestamp check passed (no negative values).")
         
         distinct_interactions = con.execute(f"SELECT DISTINCT interaction FROM read_parquet('{interactions_pq}')").fetchall()
-        valeurs_uniques = {row[0] for row in distinct_interactions}
-        assert valeurs_uniques.issubset({0, 1}), f"Error : Unauthorized interaction values {valeurs_uniques}"
+        unique_values = {row[0] for row in distinct_interactions}
+        assert unique_values.issubset({0, 1}), f"Error : Unauthorized interaction values {unique_values}"
+        print(f"      - Interaction values check passed (found: {unique_values}).")
         
-        print("Everything looks good")
+        print("All assertions passed successfully")
     else:
         print(f"File {ratings_csv} not found")
 
@@ -85,6 +88,7 @@ def main():
     for filename, sql_select in specific_conversions.items():
         input_csv = raw_dir / filename
         if input_csv.exists():
+            print(f"Converting {filename}...")
             output_pq = processed_dir / filename.replace(".csv", ".parquet")
             query = f"COPY ({sql_select.format(input=input_csv)}) TO '{output_pq}' (FORMAT PARQUET)"
             con.execute(query)
