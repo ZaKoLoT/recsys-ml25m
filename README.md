@@ -54,7 +54,7 @@ Si vous souhaitez contribuer au code ou lancer les tests, voici comment configur
 Sur Mac/Linux : `python3 -m venv .venv puis source .venv/bin/activate`
 Sur Windows : `python -m venv .venv puis .venv\Scripts\activate`
 - **Installer les dépendances de développement :**
-`pip install -r requirements-dev.txt`
+`.\.venv\scripts\python.exe -m pip install -r requirements-dev.txt`
 - **Activer les vérifications automatiques (pre-commit) :**
 `pre-commit install`
 
