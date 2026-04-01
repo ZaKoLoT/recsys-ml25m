@@ -2,7 +2,7 @@
 
 ## Project Objective
 
-This project aims to design a **recommender system** in Python (covering movies, series, books, or educational content) that combines:
+This project aims to design a **movie recommender system** in Python that combines:
 
 - A **collaborative** engine, based on interaction history,
 - A **content-based** engine, based on descriptions and synopses,
