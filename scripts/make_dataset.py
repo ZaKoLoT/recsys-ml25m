@@ -24,8 +24,10 @@ def main():
                 CAST(userId AS INTEGER) AS user_id,
                 CAST(movieId AS INTEGER) AS movie_id,
                 CAST(timestamp AS INTEGER) AS timestamp,
-                CASE WHEN rating >= 4.0 THEN 1 ELSE 0 END AS interaction
+                1 AS interaction
             FROM read_csv_auto('{ratings_csv}')
+            WHERE rating >= 4.0
+            ORDER BY timestamp
         ) TO '{interactions_pq}' (FORMAT PARQUET)
         """
         con.execute(query_interactions)
@@ -61,7 +63,8 @@ def main():
         # Conversion for movies.csv to extract year and clean title
         "movies.csv": r"""
             SELECT
-                CAST(movieId AS INTEGER) AS movie_id,
+                DISTINCT
+                CAST(movieId AS INTEGER) AS item_id,
                 CAST(TRIM(regexp_replace(title, '\s*\(\d{{4}}\)\s*$', '')) AS VARCHAR) AS title,
                 TRY_CAST(regexp_extract(title, '\((\d{{4}})\)\s*$', 1) AS INTEGER) AS year,
                 CAST(genres as VARCHAR) AS genres
@@ -71,13 +74,14 @@ def main():
         "links.csv": r"""
             SELECT CAST(movieId AS INTEGER) AS movie_id, imdbId, tmdbId
             FROM read_csv_auto('{input}')
+            WHERE tmdbId IS NOT NULL
         """,
         # Conversion for tags.csv to ensure correct data types
         "tags.csv": r"""
             SELECT
                 CAST(userId AS INTEGER) AS user_id,
                 CAST(movieId AS INTEGER) AS movie_id,
-                CAST(tag AS VARCHAR) AS tag,
+                CAST(LOWER(TRIM(tag)) AS VARCHAR) AS tag,
                 CAST(timestamp AS INTEGER) AS timestamp
             FROM read_csv_auto('{input}')
         """,
