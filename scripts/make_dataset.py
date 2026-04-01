@@ -16,7 +16,7 @@ def main():
     if ratings_csv.exists():
         # Validation and conversion of ratings.csv to interactions.parquet
         count_expected = con.execute(
-            f"SELECT COUNT(*) FROM read_csv_auto('{ratings_csv}')"
+            f"SELECT COUNT(*) FROM read_csv_auto('{ratings_csv}') WHERE rating >= 4.0"
         ).fetchone()[0]
         query_interactions = f"""
         COPY (
@@ -106,7 +106,11 @@ def main():
         input_csv = raw_dir / filename
         if input_csv.exists():
             print(f"Converting {filename}...")
-            output_pq = processed_dir / filename.replace(".csv", ".parquet")
+            if filename == "movies.csv":
+                output_name = "items.parquet"
+            else:
+                output_name = filename.replace(".csv", ".parquet")
+            output_pq = processed_dir / output_name
             query = f"COPY ({sql_select.format(input=input_csv)}) TO '{output_pq}' (FORMAT PARQUET)"
             con.execute(query)
 
