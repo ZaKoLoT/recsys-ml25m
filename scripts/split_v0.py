@@ -13,14 +13,23 @@ def calculate_sparsity(df: pd.DataFrame, user_col: str, item_col: str) -> float:
 
 
 def generate_v0_split(
-    df: pd.DataFrame, n_test: int, user_col: str, item_col: str, time_col: str
+    df: pd.DataFrame,
+    n_test: int,
+    n_val: int,
+    n_train_min: int,
+    user_col: str,
+    item_col: str,
+    time_col: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    min_required = n_test + n_val + n_train_min
+
+    df = df[df.groupby(user_col)[user_col].transform("count") >= min_required].copy()
+
     df = df.sort_values(by=[user_col, time_col]).copy()
 
     df["reverse_rank"] = df.groupby(user_col).cumcount(ascending=False)
-    df["total_inter"] = df.groupby(user_col)[user_col].transform("count")
 
-    test_mask = (df["reverse_rank"] < n_test) & (df["reverse_rank"] < df["total_inter"] - 1)
+    test_mask = df["reverse_rank"] < n_test
 
     test_df = df[test_mask].drop(columns=["reverse_rank", "total_inter"])
     train_df = df[~test_mask].drop(columns=["reverse_rank", "total_inter"])
@@ -68,12 +77,16 @@ def main():
     ITEM_COL = "movie_id"
     TIME_COL = "timestamp"
     N_TEST = 5
+    N_VAL = 2
+    N_TRAIN_MIN = 3
 
     logging.info("Loading MovieLens data...")
     df = pd.read_parquet(INPUT_FILE)
 
     logging.info("Generating split...")
-    train_df, test_df = generate_v0_split(df, N_TEST, USER_COL, ITEM_COL, TIME_COL)
+    train_df, test_df = generate_v0_split(
+        df, N_TEST, N_VAL, N_TRAIN_MIN, USER_COL, ITEM_COL, TIME_COL
+    )
 
     logging.info("Running integrity checks...")
     run_checks(train_df, test_df, USER_COL, TIME_COL)
