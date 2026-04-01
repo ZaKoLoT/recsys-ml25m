@@ -1,4 +1,4 @@
-# Technical Decision Log (RecSys Project)
+# Technical Decision Log
 
 This document centralizes our fundamental technical choices to ensure consistent evaluation throughout the project.
 
