@@ -7,11 +7,12 @@ import yaml
 
 
 def load_config(config_path: str) -> dict:
-    """
-    Loads parameters from a YAML configuration file.
-    """
+    # Loads parameters from a YAML configuration file and converts them into a dictionary.
     with open(config_path) as file:
         return yaml.safe_load(file)
+
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def main():
@@ -33,13 +34,14 @@ def main():
     min_item_inter = config.get("min_item_interactions", 5)
     n_test = config.get("n_test", 5)
     n_val = config.get("n_val", 2)
+    n_train = config.get("n_train", 3)
 
     # 4. Log the used parameters
     logging.info("--- Configuration Parameters ---")
     logging.info(f"Rating threshold: {rating_threshold}")
     logging.info(f"Min user interactions: {min_user_inter}")
     logging.info(f"Min item interactions: {min_item_inter}")
-    logging.info(f"N Test: {n_test} | N Val: {n_val}")
+    logging.info(f"N Test: {n_test} | N Val: {n_val} | N Train: {n_train}")
     logging.info("--------------------------------")
 
     # Define project directories
