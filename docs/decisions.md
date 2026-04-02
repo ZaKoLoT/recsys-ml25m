@@ -10,7 +10,7 @@ This document centralizes our fundamental technical choices to ensure consistent
 ## 2. Evaluation Protocol
 * **User-based Split Method:** We sort each user's history by date (`timestamp`).
   * *Rationale:* This simulates "the future" and prevents data leakage. In a real-world scenario, we predict what a user will watch tomorrow based on their past behavior.
-* **Split Parameters (V0):** `N_testV0 = 5`. The last 5 interactions constitute the Test set, the rest constitute the Train set. *(Note: for subsequent versions, we will introduce a validation set with `N_val = 2`).*
+* **Split Parameters (V0):** `N_testV0 = 5`. The last 5 interactions constitute the Test set, the rest constitute the Train set. We ensure a minimum of 3 interactions remain in the training set to maintain model stability. *(Note: for subsequent versions, we will introduce a validation set with `N_val = 2`).*
 * **Performance Metrics (Top-K):** Evaluation will be performed on short and medium lists with `K=10` and `K=20`. We will use **Recall@K** and **NDCG@K** metrics.
   * *Why K=10:* This represents a short list (Netflix/Spotify style). It verifies if the system is immediately relevant at the top of the list.
   * *Why K=20:* Provides a more comprehensive and stable evaluation on a slightly longer list.
