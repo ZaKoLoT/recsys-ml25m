@@ -1,9 +1,47 @@
+import argparse
+import logging
 from pathlib import Path
 
 import duckdb
+import yaml
+
+
+def load_config(config_path: str) -> dict:
+    """
+    Loads parameters from a YAML configuration file.
+    """
+    with open(config_path) as file:
+        return yaml.safe_load(file)
 
 
 def main():
+    # 1. Set up argument parser to accept --config
+    parser = argparse.ArgumentParser(description="Process raw MovieLens data.")
+    parser.add_argument(
+        "--config", type=str, required=True, help="Path to the YAML configuration file"
+    )
+
+    args = parser.parse_args()
+
+    # 2. Load the configuration file
+    logging.info(f"Loading configuration from {args.config}...")
+    config = load_config(args.config)
+
+    # 3. Extract parameters into variables
+    rating_threshold = config.get("rating_threshold", 4.0)  # Default to 4.0 if not specified
+    min_user_inter = config.get("min_user_interactions", 5)
+    min_item_inter = config.get("min_item_interactions", 5)
+    n_test = config.get("n_test", 5)
+    n_val = config.get("n_val", 2)
+
+    # 4. Log the used parameters
+    logging.info("--- Configuration Parameters ---")
+    logging.info(f"Rating threshold: {rating_threshold}")
+    logging.info(f"Min user interactions: {min_user_inter}")
+    logging.info(f"Min item interactions: {min_item_inter}")
+    logging.info(f"N Test: {n_test} | N Val: {n_val}")
+    logging.info("--------------------------------")
+
     # Define project directories
     project_dir = Path(__file__).resolve().parent.parent
     raw_dir = project_dir / "data" / "raw"
@@ -16,7 +54,7 @@ def main():
     if ratings_csv.exists():
         # Validation and conversion of ratings.csv to interactions.parquet
         count_expected = con.execute(
-            f"SELECT COUNT(*) FROM read_csv_auto('{ratings_csv}') WHERE rating >= 4.0"
+            f"SELECT COUNT(*) FROM read_csv_auto('{ratings_csv}') WHERE rating >= {rating_threshold}"
         ).fetchone()[0]
         query_interactions = f"""
         COPY (
@@ -26,7 +64,7 @@ def main():
                 CAST(timestamp AS INTEGER) AS timestamp,
                 1 AS interaction
             FROM read_csv_auto('{ratings_csv}')
-            WHERE rating >= 4.0
+            WHERE rating >= {rating_threshold}
             ORDER BY timestamp
         ) TO '{interactions_pq}' (FORMAT PARQUET)
         """
