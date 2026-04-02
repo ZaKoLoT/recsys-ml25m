@@ -31,8 +31,8 @@ def generate_v0_split(
 
     test_mask = df["reverse_rank"] < n_test
 
-    test_df = df[test_mask].drop(columns=["reverse_rank", "total_inter"])
-    train_df = df[~test_mask].drop(columns=["reverse_rank", "total_inter"])
+    test_df = df[test_mask].drop(columns=["reverse_rank"])
+    train_df = df[~test_mask].drop(columns=["reverse_rank"])
 
     return train_df, test_df
 
