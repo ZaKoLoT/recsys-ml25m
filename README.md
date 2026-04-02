@@ -29,6 +29,22 @@ Upon completion of this project, the following elements will be produced:
 
 ---
 
+## Installation and Development Environment
+
+If you wish to contribute to the code or run tests, here is how to configure your environment:
+
+- **Clone the project:**
+`git clone https://github.com/ZaKoLoT/recsys-ml25m.git`
+- **Create and activate the virtual environment:**
+On Mac/Linux: `python3 -m venv .venv && source .venv/bin/activate`
+On Windows: `python -m venv .venv && .venv\Scripts\activate`
+- **Install development dependencies:**
+`.\.venv\scripts\python.exe -m pip install -r requirements-dev.txt`
+- **Activate automatic checks (pre-commit):**
+`pre-commit install`
+
+---
+
 ## How to Reproduce Data Ingestion
 
 The project is designed to be fully reproducible. To download, clean, and prepare the raw dataset into an optimized format (Parquet), run the following command at the project root:
@@ -43,19 +59,13 @@ On Mac/Linux: `python3 scripts/make_dataset.py --config configs/dataset_v1.yaml`
 
 ---
 
-## **Installation and Development Environment**
+## Data Preparation (Evaluation Split V0)
+Once the interactions are processed, we need to create a temporal split (Train/Test) for the initial model evaluation. Run the following command from the project root:
 
-If you wish to contribute to the code or run tests, here is how to configure your environment:
+On Windows: `python scripts/split_v0.py`
+On Mac/Linux: `python3 scripts/split_v0.py`
 
-- **Clone the project:**
-`git clone https://github.com/ZaKoLoT/recsys-ml25m.git`
-- **Create and activate the virtual environment:**
-On Mac/Linux: `python3 -m venv .venv && source .venv/bin/activate`
-On Windows: `python -m venv .venv && .venv\Scripts\activate`
-- **Install development dependencies:**
-`.\.venv\scripts\python.exe -m pip install -r requirements-dev.txt`
-- **Activate automatic checks (pre-commit):**
-`pre-commit install`
+---
 
 ## Quality Tools
 
