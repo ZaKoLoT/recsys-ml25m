@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import json
 import logging
 from pathlib import Path
@@ -238,64 +239,29 @@ def print_filtering_report(df_before: pd.DataFrame, df_after: pd.DataFrame):
     logging.info("===============================================")
 
 
-def save_filtering_stats(df_before, df_after, config, output_dir):
+def collect_filtering_stats(df_before, df_after) -> dict:
     """
-    Saves filtering statistics to metadata.json and a markdown report.
+    Collects filtering statistics.
 
     Args:
         df_before (pd.DataFrame): Dataframe before filtering.
         df_after (pd.DataFrame): Dataframe after filtering.
-        config (dict): Configuration parameters used for filtering.
-        output_dir (Path): Directory where the reports should be saved.
 
     Returns:
-        None
+        dict: Filtering stats (users, items, interactions before/after).
     """
-    report_dir = output_dir.parent / "reports"
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    # Compile stats into a dictionary
-    stats = {
-        "config_used": config,
-        "results": {
-            "users": {
-                "before": int(df_before["user_id"].nunique()),
-                "after": int(df_after["user_id"].nunique()),
-            },
-            "items": {
-                "before": int(df_before["movie_id"].nunique()),
-                "after": int(df_after["movie_id"].nunique()),
-            },
-            "interactions": {"before": len(df_before), "after": len(df_after)},
-            "pct_removed": round(((len(df_before) - len(df_after)) / len(df_before)) * 100, 2),
+    return {
+        "users": {
+            "before": int(df_before["user_id"].nunique()),
+            "after": int(df_after["user_id"].nunique()),
         },
+        "items": {
+            "before": int(df_before["movie_id"].nunique()),
+            "after": int(df_after["movie_id"].nunique()),
+        },
+        "interactions": {"before": len(df_before), "after": len(df_after)},
+        "pct_removed": round(((len(df_before) - len(df_after)) / len(df_before)) * 100, 2),
     }
-
-    # Save stats to metadata.json
-    with open(report_dir / "metadata.json", "w") as f:
-        json.dump(stats, f, indent=4)
-
-    # Generate a markdown report summarizing the filtering results
-    with open(report_dir / "data_cleaning.md", "w") as f:
-        f.write("# Data Cleaning Report\n\n")
-        f.write("## Configuration\n")
-        for k, v in config.items():
-            f.write(f"- **{k}**: {v}\n")
-
-        f.write("\n## Results\n")
-        f.write("| Metric | Before | After | Change |\n")
-        f.write("| :--- | :--- | :--- | :--- |\n")
-        f.write(
-            f"| Users | {stats['results']['users']['before']} | {stats['results']['users']['after']} | - |\n"
-        )
-        f.write(
-            f"| Items | {stats['results']['items']['before']} | {stats['results']['items']['after']} | - |\n"
-        )
-        f.write(
-            f"| Interactions | {stats['results']['interactions']['before']} | {stats['results']['interactions']['after']} | -{stats['results']['pct_removed']}% |\n"
-        )
-
-    logging.info(f"Stats saved to {report_dir}")
 
 
 def process_ratings(con, raw_dir, processed_dir, rating_threshold, min_user_inter, min_item_inter):
@@ -306,6 +272,8 @@ def process_ratings(con, raw_dir, processed_dir, rating_threshold, min_user_inte
         raw_dir (Path): Path to raw data directory.
         processed_dir (Path): Path to processed data directory.
         rating_threshold (float): Minimum rating to consider as interaction.
+        min_user_inter (int): Minimum user interactions for K-core filtering.
+        min_item_inter (int): Minimum item interactions for K-core filtering.
     """
     ratings_csv = raw_dir / "ratings.csv"
     interactions_pq = processed_dir / "interactions.parquet"
@@ -364,19 +332,14 @@ def process_ratings(con, raw_dir, processed_dir, rating_threshold, min_user_inte
         logging.info("Saving filtered data back to Parquet...")
         df_filtered_interactions.to_parquet(interactions_pq, index=False)
 
-        current_config = {
-            "rating_threshold": rating_threshold,
-            "min_user_interactions": min_user_inter,
-            "min_item_interactions": min_item_inter,
-        }
-        save_filtering_stats(
+        filtering_stats = collect_filtering_stats(
             df_before=df_raw_interactions,
             df_after=df_filtered_interactions,
-            config=current_config,
-            output_dir=interactions_pq,
         )
+        return filtering_stats
     else:
         print(f"File {ratings_csv} not found")
+        return {}
 
 
 def process_specific_files(con, raw_dir, processed_dir, specific_conversions):
@@ -399,6 +362,261 @@ def process_specific_files(con, raw_dir, processed_dir, specific_conversions):
             output_pq = processed_dir / output_name
             query = f"COPY ({sql_select.format(input=input_csv)}) TO '{output_pq}' (FORMAT PARQUET)"
             con.execute(query)
+
+
+def generate_v1_split(
+    df: pd.DataFrame,
+    n_test: int,
+    n_val: int,
+    n_train: int,
+    user_col: str,
+    time_col: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+    """Generates a temporal train/val/test split per user.
+
+    Each user's interactions are sorted by time. The last n_test interactions
+    go to test, the n_val before that go to val, and the rest go to train.
+    Users with fewer than n_test + n_val + n_train interactions are excluded and logged.
+
+    Args:
+        df (pd.DataFrame): Filtered interactions dataframe.
+        n_test (int): Number of interactions per user reserved for test.
+        n_val (int): Number of interactions per user reserved for validation.
+        n_train (int): Minimum number of interactions per user required for train.
+        user_col (str): Name of the user column.
+        time_col (str): Name of the timestamp column.
+
+    Returns:
+        tuple: (train_df, val_df, test_df, n_excluded) where n_excluded is the
+               number of users dropped for having too few interactions.
+    """
+    min_required = n_test + n_val + n_train
+    n_total_users = df[user_col].nunique()
+    user_counts = df.groupby(user_col)[user_col].transform("count")
+    df = df[user_counts >= min_required].copy()
+    n_excluded = n_total_users - df[user_col].nunique()
+    logging.info(
+        f"Users excluded (fewer than {min_required} interactions): {n_excluded} / {n_total_users}"
+    )
+
+    df = df.sort_values(by=[user_col, time_col]).copy()
+    df["reverse_rank"] = df.groupby(user_col).cumcount(ascending=False)
+
+    test_mask = df["reverse_rank"] < n_test
+    val_mask = (df["reverse_rank"] >= n_test) & (df["reverse_rank"] < n_test + n_val)
+
+    test_df = df[test_mask].drop(columns=["reverse_rank"])
+    val_df = df[val_mask].drop(columns=["reverse_rank"])
+    train_df = df[~test_mask & ~val_mask].drop(columns=["reverse_rank"])
+
+    return train_df, val_df, test_df, n_excluded
+
+
+def run_v1_checks(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    user_col: str,
+    time_col: str,
+):
+    """Runs integrity checks on the V1 split.
+
+    Verifies no index overlap between splits, that val/test users are all
+    present in train, and that temporal order is respected (train < val < test).
+
+    Args:
+        train_df (pd.DataFrame): Training split.
+        val_df (pd.DataFrame): Validation split.
+        test_df (pd.DataFrame): Test split.
+        user_col (str): Name of the user column.
+        time_col (str): Name of the timestamp column.
+
+    Returns:
+        None
+    """
+    assert len(set(train_df.index) & set(val_df.index)) == 0, "Overlap train/val"
+    assert len(set(train_df.index) & set(test_df.index)) == 0, "Overlap train/test"
+    assert len(set(val_df.index) & set(test_df.index)) == 0, "Overlap val/test"
+
+    train_users = set(train_df[user_col].unique())
+    assert set(val_df[user_col].unique()).issubset(train_users), "Val users missing from train"
+    assert set(test_df[user_col].unique()).issubset(train_users), "Test users missing from train"
+
+    val_users = list(val_df[user_col].unique())
+    max_train_ts = train_df.groupby(user_col)[time_col].max()
+    min_val_ts = val_df.groupby(user_col)[time_col].min()
+    max_val_ts = val_df.groupby(user_col)[time_col].max()
+    min_test_ts = test_df.groupby(user_col)[time_col].min()
+
+    assert (max_train_ts.loc[val_users] <= min_val_ts.loc[val_users]).all(), (
+        "Temporal leakage: train > val"
+    )
+    assert (max_val_ts.loc[val_users] <= min_test_ts.loc[val_users]).all(), (
+        "Temporal leakage: val > test"
+    )
+
+
+def calculate_sparsity(df: pd.DataFrame, user_col: str, item_col: str) -> float:
+    """Calculates sparsity of an interaction matrix.
+
+    Args:
+        df (pd.DataFrame): Interactions dataframe.
+        user_col (str): Name of the user column.
+        item_col (str): Name of the item column.
+
+    Returns:
+        float: Sparsity value between 0 and 1.
+    """
+    n_users = df[user_col].nunique()
+    n_items = df[item_col].nunique()
+    return 1.0 - (len(df) / (n_users * n_items)) if n_users and n_items else 1.0
+
+
+def print_split_stats_v1(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    user_col: str,
+    item_col: str,
+):
+    """Logs a summary table of the V1 train/val/test split.
+
+    Args:
+        train_df (pd.DataFrame): Training split.
+        val_df (pd.DataFrame): Validation split.
+        test_df (pd.DataFrame): Test split.
+        user_col (str): Name of the user column.
+        item_col (str): Name of the item column.
+    """
+    stats = f"""
+### Split V1 Statistics
+
+| Metric | Train | Val | Test |
+| :--- | :--- | :--- | :--- |
+| Users | {train_df[user_col].nunique():,} | {val_df[user_col].nunique():,} | {test_df[user_col].nunique():,} |
+| Items | {train_df[item_col].nunique():,} | {val_df[item_col].nunique():,} | {test_df[item_col].nunique():,} |
+| Interactions | {len(train_df):,} | {len(val_df):,} | {len(test_df):,} |
+| Sparsity | {calculate_sparsity(train_df, user_col, item_col):.4%} | {calculate_sparsity(val_df, user_col, item_col):.4%} | {calculate_sparsity(test_df, user_col, item_col):.4%} |
+    """
+    logging.info(stats)
+
+
+def build_item_tables(processed_dir: Path):
+    """Builds enriched item tables (item_tags, item_text) and runs integrity checks.
+
+    Reads items.parquet and tags.parquet to produce:
+    - item_tags.parquet : (movie_id, tags) — unique tags per movie, space-separated
+    - item_text.parquet : (movie_id, text) — title + genres + tags concatenated
+
+    Also verifies that all movie_ids in interactions.parquet exist in items.parquet.
+
+    Args:
+        processed_dir (Path): Path to the processed data directory.
+    """
+    items_df = pd.read_parquet(processed_dir / "items.parquet")
+    tags_df = pd.read_parquet(processed_dir / "tags.parquet")
+    interactions_df = pd.read_parquet(processed_dir / "interactions.parquet")
+
+    # --- item_tags.parquet ---
+    item_tags_df = (
+        tags_df.groupby("movie_id")["tag"]
+        .apply(lambda x: " ".join(x.dropna().unique()))
+        .reset_index()
+        .rename(columns={"tag": "tags"})
+    )
+    item_tags_df.to_parquet(processed_dir / "item_tags.parquet", index=False)
+    logging.info(f"item_tags.parquet: {len(item_tags_df):,} movies with tags")
+
+    # --- item_text.parquet ---
+    # Rename item_id -> movie_id to join with tags
+    items_for_text = items_df.rename(columns={"item_id": "movie_id"})
+    text_df = items_for_text.merge(item_tags_df, on="movie_id", how="left")
+
+    # genres: replace pipe separator with space
+    text_df["genres_clean"] = text_df["genres"].str.replace("|", " ", regex=False)
+
+    # tags: fallback to empty string if movie has no tags
+    text_df["tags"] = text_df["tags"].fillna("")
+
+    # text: title + genres + tags (strip to avoid leading/trailing spaces)
+    text_df["text"] = (
+        text_df["title"].fillna("")
+        + " "
+        + text_df["genres_clean"].fillna("")
+        + " "
+        + text_df["tags"]
+    ).str.strip()
+
+    item_text_df = text_df[["movie_id", "text"]]
+    item_text_df.to_parquet(processed_dir / "item_text.parquet", index=False)
+    logging.info(f"item_text.parquet: {len(item_text_df):,} movies")
+
+    # --- Integrity checks ---
+    # 1. No NaN in item_text.text
+    n_nan_text = item_text_df["text"].isna().sum()
+    assert n_nan_text == 0, f"NaN in item_text.text: {n_nan_text} rows"
+
+    # 2. All movie_ids in interactions exist in items
+    interaction_ids = set(interactions_df["movie_id"].unique())
+    item_ids = set(items_df["item_id"].unique())
+    missing = interaction_ids - item_ids
+    assert len(missing) == 0, f"movie_ids in interactions missing from items: {missing}"
+
+    logging.info("Item table integrity checks passed.")
+
+
+def collect_split_stats(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    n_excluded: int,
+    user_col: str,
+    item_col: str,
+) -> dict:
+    """Collects V1 split statistics.
+
+    Args:
+        train_df (pd.DataFrame): Training split.
+        val_df (pd.DataFrame): Validation split.
+        test_df (pd.DataFrame): Test split.
+        n_excluded (int): Number of users excluded for having too few interactions.
+        user_col (str): Name of the user column.
+        item_col (str): Name of the item column.
+
+    Returns:
+        dict: Split stats (users_excluded, train/val/test sizes).
+    """
+    return {
+        "users_excluded": n_excluded,
+        "train": {
+            "users": int(train_df[user_col].nunique()),
+            "items": int(train_df[item_col].nunique()),
+            "interactions": len(train_df),
+        },
+        "val": {
+            "users": int(val_df[user_col].nunique()),
+            "items": int(val_df[item_col].nunique()),
+            "interactions": len(val_df),
+        },
+        "test": {
+            "users": int(test_df[user_col].nunique()),
+            "items": int(test_df[item_col].nunique()),
+            "interactions": len(test_df),
+        },
+    }
+
+
+def write_metadata(metadata: dict, processed_dir: Path):
+    """Writes the full metadata to data/processed/metadata.json.
+
+    Args:
+        metadata (dict): Complete metadata dict to serialize.
+        processed_dir (Path): Path to the processed data directory.
+    """
+    metadata_path = processed_dir / "metadata.json"
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+    logging.info(f"Metadata written to {metadata_path}")
 
 
 def process_remaining_files(con, raw_dir, processed_dir, traited_files):
@@ -443,11 +661,73 @@ def main():
 
     raw_dir, processed_dir, con = setup_directories()
 
-    process_ratings(con, raw_dir, processed_dir, rating_threshold, min_user_inter, min_item_inter)
+    filtering_stats = process_ratings(
+        con, raw_dir, processed_dir, rating_threshold, min_user_inter, min_item_inter
+    )
 
     process_specific_files(con, raw_dir, processed_dir, SPECIFIC_CONVERSIONS)
 
     process_remaining_files(con, raw_dir, processed_dir, TRAITED_FILES)
+
+    logging.info("Building item tables (item_tags, item_text)...")
+    build_item_tables(processed_dir)
+
+    logging.info("Generating V1 split (train/val/test)...")
+    df_filtered = pd.read_parquet(processed_dir / "interactions.parquet")
+    train_df, val_df, test_df, n_excluded = generate_v1_split(
+        df=df_filtered,
+        n_test=n_test,
+        n_val=n_val,
+        n_train=n_train,
+        user_col="user_id",
+        time_col="timestamp",
+    )
+
+    logging.info("Running V1 split integrity checks...")
+    run_v1_checks(train_df, val_df, test_df, user_col="user_id", time_col="timestamp")
+    logging.info("All checks passed.")
+
+    logging.info("Saving V1 splits to Parquet...")
+    train_df.to_parquet(processed_dir / "interactions_train.parquet", index=False)
+    val_df.to_parquet(processed_dir / "interactions_val.parquet", index=False)
+    test_df.to_parquet(processed_dir / "interactions_test.parquet", index=False)
+
+    print_split_stats_v1(train_df, val_df, test_df, user_col="user_id", item_col="movie_id")
+    split_stats = collect_split_stats(
+        train_df,
+        val_df,
+        test_df,
+        n_excluded,
+        user_col="user_id",
+        item_col="movie_id",
+    )
+
+    metadata = {
+        "version": config.get("dataset_version", "dataset_v1"),
+        "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "source": "ml-25m",
+        "config": {
+            "rating_threshold": rating_threshold,
+            "min_user_interactions": min_user_inter,
+            "min_item_interactions": min_item_inter,
+            "n_test": n_test,
+            "n_val": n_val,
+            "n_train": n_train,
+            "method": "temporal_split_per_user",
+        },
+        "paths": {
+            "interactions": "data/processed/interactions.parquet",
+            "train": "data/processed/interactions_train.parquet",
+            "val": "data/processed/interactions_val.parquet",
+            "test": "data/processed/interactions_test.parquet",
+            "items": "data/processed/items.parquet",
+            "item_tags": "data/processed/item_tags.parquet",
+            "item_text": "data/processed/item_text.parquet",
+        },
+        "filtering": filtering_stats,
+        "split": split_stats,
+    }
+    write_metadata(metadata, processed_dir)
 
 
 if __name__ == "__main__":

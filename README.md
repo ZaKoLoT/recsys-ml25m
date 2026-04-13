@@ -45,25 +45,12 @@ On Windows: `python -m venv .venv && .venv\Scripts\activate`
 
 ---
 
-## How to Reproduce Data Ingestion
+## How to Reproduce Data Ingestion and Data Preparation
 
-The project is designed to be fully reproducible. To download, clean, and prepare the raw dataset into an optimized format (Parquet), run the following command at the project root:
+The project is designed to be fully reproducible. To download, clean, and prepare the raw dataset into an optimized format (Parquet), iterative cleaning, table creation, and train/val/test split, run the following command at the project root:
 
-On Windows: `python scripts/make_dataset.py`
-On Mac/Linux: `python3 scripts/make_dataset.py`
-
-To run the full pipeline with the final configuration (iterative cleaning, table creation, and train/val/test split), use:
-
-On Windows: `python scripts/make_dataset.py --config configs/dataset_v1.yaml`
-On Mac/Linux: `python3 scripts/make_dataset.py --config configs/dataset_v1.yaml`
-
----
-
-## Data Preparation (Evaluation Split V0)
-Once the interactions are processed, we need to create a temporal split (Train/Test) for the initial model evaluation. Run the following command from the project root:
-
-On Windows: `python scripts/split_v0.py`
-On Mac/Linux: `python3 scripts/split_v0.py`
+- On Windows: `python scripts/make_dataset.py --config configs/dataset_V1.yaml`
+- On Mac/Linux: `python3 scripts/make_dataset.py --config configs/dataset_V1.yaml`
 
 ---
 
