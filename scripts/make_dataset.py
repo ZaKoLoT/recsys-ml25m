@@ -47,7 +47,7 @@ SPECIFIC_CONVERSIONS = {
     "tags.csv": r"""
         SELECT
             CAST(userId AS INTEGER) AS user_id,
-            CAST(movieId AS INTEGER) AS movie_id,
+            CAST(movieId AS INTEGER) AS item_id,
             CAST(LOWER(TRIM(tag)) AS VARCHAR) AS tag,
             CAST(timestamp AS INTEGER) AS timestamp
         FROM read_csv_auto('{input}')
@@ -62,7 +62,7 @@ SPECIFIC_CONVERSIONS = {
     # Conversion for genome-scores.csv to ensure correct data types
     "genome-scores.csv": r"""
         SELECT
-            CAST(movieId AS INTEGER) AS movie_id,
+            CAST(movieId AS INTEGER) AS item_id,
             CAST(tagId AS INTEGER) AS tag_id,
             CAST(relevance AS FLOAT) AS relevance
         FROM read_csv_auto('{input}')
@@ -166,9 +166,9 @@ def filter_interactions_iteratively(
         start_len = len(df)
 
         # 1. Filter out rare items
-        item_counts = df["movie_id"].value_counts()
+        item_counts = df["item_id"].value_counts()
         valid_items = item_counts[item_counts >= min_item_inter].index
-        df = df[df["movie_id"].isin(valid_items)]
+        df = df[df["item_id"].isin(valid_items)]
 
         # 2. Filter out rare users
         user_counts = df["user_id"].value_counts()
@@ -201,12 +201,12 @@ def print_filtering_report(df_before: pd.DataFrame, df_after: pd.DataFrame):
     """
     users_b, items_b, inter_b = (
         df_before["user_id"].nunique(),
-        df_before["movie_id"].nunique(),
+        df_before["item_id"].nunique(),
         len(df_before),
     )
     users_a, items_a, inter_a = (
         df_after["user_id"].nunique(),
-        df_after["movie_id"].nunique(),
+        df_after["item_id"].nunique(),
         len(df_after),
     )
 
@@ -220,8 +220,8 @@ def print_filtering_report(df_before: pd.DataFrame, df_after: pd.DataFrame):
     u_min_b, u_med_b, u_max_b = get_stats(df_before, "user_id")
     u_min_a, u_med_a, u_max_a = get_stats(df_after, "user_id")
 
-    i_min_b, i_med_b, i_max_b = get_stats(df_before, "movie_id")
-    i_min_a, i_med_a, i_max_a = get_stats(df_after, "movie_id")
+    i_min_b, i_med_b, i_max_b = get_stats(df_before, "item_id")
+    i_min_a, i_med_a, i_max_a = get_stats(df_after, "item_id")
 
     logging.info("=== Data Filtering Report (Before -> After) ===")
     logging.info(f"Users: {users_b} -> {users_a}")
@@ -256,8 +256,8 @@ def collect_filtering_stats(df_before, df_after) -> dict:
             "after": int(df_after["user_id"].nunique()),
         },
         "items": {
-            "before": int(df_before["movie_id"].nunique()),
-            "after": int(df_after["movie_id"].nunique()),
+            "before": int(df_before["item_id"].nunique()),
+            "after": int(df_after["item_id"].nunique()),
         },
         "interactions": {"before": len(df_before), "after": len(df_after)},
         "pct_removed": round(((len(df_before) - len(df_after)) / len(df_before)) * 100, 2),
@@ -287,7 +287,7 @@ def process_ratings(con, raw_dir, processed_dir, rating_threshold, min_user_inte
         COPY (
             SELECT
                 CAST(userId AS INTEGER) AS user_id,
-                CAST(movieId AS INTEGER) AS movie_id,
+                CAST(movieId AS INTEGER) AS item_id,
                 CAST(timestamp AS INTEGER) AS timestamp,
                 1 AS interaction
             FROM read_csv_auto('{ratings_csv}')
@@ -505,10 +505,10 @@ def build_item_tables(processed_dir: Path):
     """Builds enriched item tables (item_tags, item_text) and runs integrity checks.
 
     Reads items.parquet and tags.parquet to produce:
-    - item_tags.parquet : (movie_id, tags) — unique tags per movie, space-separated
-    - item_text.parquet : (movie_id, text) — title + genres + tags concatenated
+    - item_tags.parquet : (item_id, tags) — unique tags per item, space-separated
+    - item_text.parquet : (item_id, text) — title + genres + tags concatenated
 
-    Also verifies that all movie_ids in interactions.parquet exist in items.parquet.
+    Also verifies that all item_ids in interactions.parquet exist in items.parquet.
 
     Args:
         processed_dir (Path): Path to the processed data directory.
@@ -519,23 +519,22 @@ def build_item_tables(processed_dir: Path):
 
     # --- item_tags.parquet ---
     item_tags_df = (
-        tags_df.groupby("movie_id")["tag"]
+        tags_df.rename(columns={"movie_id": "item_id"})
+        .groupby("item_id")["tag"]
         .apply(lambda x: " ".join(x.dropna().unique()))
         .reset_index()
         .rename(columns={"tag": "tags"})
     )
     item_tags_df.to_parquet(processed_dir / "item_tags.parquet", index=False)
-    logging.info(f"item_tags.parquet: {len(item_tags_df):,} movies with tags")
+    logging.info(f"item_tags.parquet: {len(item_tags_df):,} items with tags")
 
     # --- item_text.parquet ---
-    # Rename item_id -> movie_id to join with tags
-    items_for_text = items_df.rename(columns={"item_id": "movie_id"})
-    text_df = items_for_text.merge(item_tags_df, on="movie_id", how="left")
+    text_df = items_df.merge(item_tags_df, on="item_id", how="left")
 
     # genres: replace pipe separator with space
     text_df["genres_clean"] = text_df["genres"].str.replace("|", " ", regex=False)
 
-    # tags: fallback to empty string if movie has no tags
+    # tags: fallback to empty string if item has no tags
     text_df["tags"] = text_df["tags"].fillna("")
 
     # text: title + genres + tags (strip to avoid leading/trailing spaces)
@@ -547,20 +546,20 @@ def build_item_tables(processed_dir: Path):
         + text_df["tags"]
     ).str.strip()
 
-    item_text_df = text_df[["movie_id", "text"]]
+    item_text_df = text_df[["item_id", "text"]]
     item_text_df.to_parquet(processed_dir / "item_text.parquet", index=False)
-    logging.info(f"item_text.parquet: {len(item_text_df):,} movies")
+    logging.info(f"item_text.parquet: {len(item_text_df):,} items")
 
     # --- Integrity checks ---
     # 1. No NaN in item_text.text
     n_nan_text = item_text_df["text"].isna().sum()
     assert n_nan_text == 0, f"NaN in item_text.text: {n_nan_text} rows"
 
-    # 2. All movie_ids in interactions exist in items
-    interaction_ids = set(interactions_df["movie_id"].unique())
+    # 2. All item_ids in interactions exist in items
+    interaction_ids = set(interactions_df["item_id"].unique())
     item_ids = set(items_df["item_id"].unique())
     missing = interaction_ids - item_ids
-    assert len(missing) == 0, f"movie_ids in interactions missing from items: {missing}"
+    assert len(missing) == 0, f"item_ids in interactions missing from items: {missing}"
 
     logging.info("Item table integrity checks passed.")
 
@@ -692,14 +691,14 @@ def main():
     val_df.to_parquet(processed_dir / "interactions_val.parquet", index=False)
     test_df.to_parquet(processed_dir / "interactions_test.parquet", index=False)
 
-    print_split_stats_v1(train_df, val_df, test_df, user_col="user_id", item_col="movie_id")
+    print_split_stats_v1(train_df, val_df, test_df, user_col="user_id", item_col="item_id")
     split_stats = collect_split_stats(
         train_df,
         val_df,
         test_df,
         n_excluded,
         user_col="user_id",
-        item_col="movie_id",
+        item_col="item_id",
     )
 
     metadata = {

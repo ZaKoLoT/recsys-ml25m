@@ -74,7 +74,7 @@ def main():
     TEST_OUTPUT = Path("data/processed/interactions_test_v0.parquet")
 
     USER_COL = "user_id"
-    ITEM_COL = "movie_id"
+    ITEM_COL = "item_id"
     TIME_COL = "timestamp"
     N_TEST = 5
     N_VAL = 2

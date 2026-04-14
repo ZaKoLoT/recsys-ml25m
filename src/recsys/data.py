@@ -10,7 +10,7 @@ def load_splits() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     Returns:
         tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: train, val, test dataframes.
-            Each has columns: user_id, movie_id, timestamp, interaction.
+            Each has columns: user_id, item_id, timestamp, interaction.
     """
     train = pd.read_parquet(DATA_PROCESSED_DIR / "interactions_train.parquet")
     val = pd.read_parquet(DATA_PROCESSED_DIR / "interactions_val.parquet")
@@ -31,7 +31,7 @@ def load_tags() -> pd.DataFrame:
     """Loads the item tags table.
 
     Returns:
-        pd.DataFrame: Item tags with columns: movie_id, tags.
+        pd.DataFrame: Item tags with columns: item_id, tags.
     """
     return pd.read_parquet(DATA_PROCESSED_DIR / "item_tags.parquet")
 
@@ -40,6 +40,6 @@ def load_text() -> pd.DataFrame:
     """Loads the item text table (title + genres + tags concatenated).
 
     Returns:
-        pd.DataFrame: Item text with columns: movie_id, text.
+        pd.DataFrame: Item text with columns: item_id, text.
     """
     return pd.read_parquet(DATA_PROCESSED_DIR / "item_text.parquet")
