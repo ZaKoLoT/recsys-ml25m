@@ -606,13 +606,15 @@ def collect_split_stats(
 
 
 def write_metadata(metadata: dict, processed_dir: Path):
-    """Writes the full metadata to data/processed/metadata.json.
+    """Writes the full metadata to data/reports/metadata.json.
 
     Args:
         metadata (dict): Complete metadata dict to serialize.
         processed_dir (Path): Path to the processed data directory.
     """
-    metadata_path = processed_dir / "metadata.json"
+    report_dir = processed_dir.parent / "reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = report_dir / "metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=4)
     logging.info(f"Metadata written to {metadata_path}")
