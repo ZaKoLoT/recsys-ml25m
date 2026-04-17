@@ -6,7 +6,7 @@ from src.recsys.models.popularity import fit_popularity, recommend
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-K = 10
+KS = [10, 20]
 
 
 def main():
@@ -21,21 +21,27 @@ def main():
 
     recommend_fn = lambda _, seen, k: recommend(ranking, seen, k)  # noqa: E731
 
-    logging.info("Evaluating on val...")
-    val_results = evaluate_model(val, train_seen, recommend_fn, k=K)
-    logging.info(f"Val  -> {val_results}")
+    val_results: dict = {}
+    test_results: dict = {}
 
-    logging.info("Evaluating on test...")
-    test_results = evaluate_model(test, train_seen, recommend_fn, k=K)
-    logging.info(f"Test -> {test_results}")
+    for k in KS:
+        logging.info(f"Evaluating on val with K={k}...")
+        results = evaluate_model(val, train_seen, recommend_fn, k=k)
+        val_results.update(results)
+        logging.info(f"Val K={k} -> {results}")
+
+        logging.info(f"Evaluating on test with K={k}...")
+        results = evaluate_model(test, train_seen, recommend_fn, k=k)
+        test_results.update(results)
+        logging.info(f"Test K={k} -> {results}")
 
     write_report(
         model_name="baseline_popularity",
         val_results=val_results,
         test_results=test_results,
-        k=K,
+        ks=KS,
         params={
-            "K": K,
+            "K": ", ".join(str(k) for k in KS),
             "method": "global item interaction count on train",
             "leakage": "train items excluded from recommendations",
         },

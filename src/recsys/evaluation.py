@@ -63,7 +63,7 @@ def write_report(
     model_name: str,
     val_results: dict,
     test_results: dict,
-    k: int,
+    ks: list[int],
     params: dict,
 ):
     """Writes evaluation results to reports/<model_name>.md.
@@ -72,7 +72,7 @@ def write_report(
         model_name: Name used for the report filename (e.g. "baseline_popularity").
         val_results: Metrics dict for the validation split.
         test_results: Metrics dict for the test split.
-        k: Cutoff used for evaluation.
+        ks: List of cutoffs used for evaluation.
         params: Dict of model/eval parameters to document in the report.
     """
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -90,7 +90,10 @@ def write_report(
             f" | Test ({test_results['n_users']:,} users) |\n"
         )
         f.write("| :--- | :--- | :--- |\n")
-        for key in [f"Recall@{k}", f"nDCG@{k}"]:
-            f.write(f"| {key} | {val_results[key]} | {test_results[key]} |\n")
+        for k in ks:
+            f.write(
+                f"| Recall@{k} | {val_results[f'Recall@{k}']} | {test_results[f'Recall@{k}']} |\n"
+            )
+            f.write(f"| nDCG@{k} | {val_results[f'nDCG@{k}']} | {test_results[f'nDCG@{k}']} |\n")
 
     logging.info(f"Report written to {path}")
