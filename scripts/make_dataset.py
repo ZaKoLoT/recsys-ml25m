@@ -399,7 +399,7 @@ def generate_v1_split(
         f"Users excluded (fewer than {min_required} interactions): {n_excluded} / {n_total_users}"
     )
 
-    df = df.sort_values(by=[user_col, time_col]).copy()
+    df = df.sort_values(by=[user_col, time_col, "item_id"], kind="stable").copy()
     df["reverse_rank"] = df.groupby(user_col).cumcount(ascending=False)
 
     test_mask = df["reverse_rank"] < n_test

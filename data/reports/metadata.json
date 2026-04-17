@@ -1,6 +1,6 @@
 {
     "version": "v1",
-    "created_at": "2026-04-14T14:39:23",
+    "created_at": "2026-04-17T20:06:45",
     "source": "ml-25m",
     "config": {
         "rating_threshold": 4.0,
@@ -44,12 +44,12 @@
         },
         "val": {
             "users": 154084,
-            "items": 11109,
+            "items": 11120,
             "interactions": 308168
         },
         "test": {
             "users": 154084,
-            "items": 14746,
+            "items": 14798,
             "interactions": 770420
         }
     }
