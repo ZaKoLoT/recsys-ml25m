@@ -34,7 +34,7 @@ Upon completion of this project, the following elements will be produced:
 If you wish to contribute to the code or run tests, here is how to configure your environment:
 
 - **Clone the project:**
-`git clone https://github.com/ZaKoLoT/recsys-ml25m.git`
+`git clone https://github.com/MaximeLeverino/recsys-ml25m.git`
 - **Create and activate the virtual environment:**
 On Mac/Linux: `python3 -m venv .venv && source .venv/bin/activate`
 On Windows: `python -m venv .venv && .venv\Scripts\activate`
